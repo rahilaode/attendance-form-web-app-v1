@@ -48,4 +48,4 @@ jobs:
             echo "POSTGRES_PORT=$POSTGRES_PORT" >> .env
 
             # Run app
-            docker compose -f docker-compose-staging.yaml up --build --detach
+            docker compose -f docker-compose-stg-and-prod.yaml up --build --detach
