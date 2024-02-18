@@ -1,0 +1,88 @@
+name: Deploy Production 🚀
+
+on:  
+  push:
+    tags:
+      - '*'
+
+jobs:
+
+  build-push:
+    name: Push Image To Container Registry 🛒
+    runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build and push current flaskapp
+        uses: docker/build-push-action@v4
+        with:
+            context: ./app
+            file: ./app/Dockerfile
+            push: true
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/flaskapp:$TAG_NAME
+
+      - name: Build and push latest flaskapp
+        uses: docker/build-push-action@v4
+        with:
+            context: ./app
+            file: ./app/Dockerfile
+            push: true
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/flaskapp:latest
+
+  deploy-production:
+    name: Deploy to production server 🚀
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Execute deployment command
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_PATH: ${{ vars.APP_PATH }}
+          GIT_URL: ${{ secrets.GIT_URL }}
+          POSTGRES_USER: ${{ secrets.DB_USER_PROD }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASWORD_PROD }}
+          POSTGRES_DB: ${{ secrets.DB_DBNAME_PROD }}
+          POSTGRES_HOST: ${{ secrets.DB_HOST_PROD }}
+          POSTGRES_PORT: ${{ vars.DB_PORT_PROD }}
+
+        with:
+          host: ${{ secrets.SSH_HOST_PROD }}
+          username: ${{ vars.SSH_USER_NAME_PROD }}
+          key: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+          envs: APP_PATH, GIT_URL, BRANCH_NAME, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST, POSTGRES_PORT
+          script: |
+
+            # Delete folder if exists
+            sudo rm -rf $APP_PATH
+
+            # Add known hosts
+            ssh-keyscan github.com > ~/.ssh/known_hosts
+
+            # Clone Repository
+            git clone $GIT_URL
+
+            # Going to app directory
+            cd $APP_PATH
+
+            # Create env
+            echo "POSTGRES_USER=$POSTGRES_USER" >> .env
+            echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> .env
+            echo "POSTGRES_DB=$POSTGRES_DB" >> .env
+            echo "POSTGRES_HOST=$POSTGRES_HOST" >> .env
+            echo "POSTGRES_PORT=$POSTGRES_PORT" >> .env
+
+            # Run app
+            docker compose -f docker-compose-staging.yaml up --build --detach
