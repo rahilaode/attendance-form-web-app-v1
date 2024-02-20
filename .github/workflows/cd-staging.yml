@@ -52,4 +52,6 @@ jobs:
             sudo docker compose up app-stg --build --detach
       
       - name: Test Hit Endpoint
-        run: curl ${{ secrets.STG_URL }}
+        run: |
+          sleep 20
+          curl ${{ secrets.STG_URL }}
